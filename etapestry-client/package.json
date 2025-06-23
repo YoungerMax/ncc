@@ -1,0 +1,14 @@
+{
+  "name": "etapestry-client",
+  "module": "index.ts",
+  "type": "module",
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "fast-xml-parser": "^5.2.5"
+  }
+}
