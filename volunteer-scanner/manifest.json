@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "update_url": "",
+  "update_url": "https://youngermax.github.io/ncc/updates.xml",
   "name": "Needham Community Council Volunteer Kiosk",
   "version": "2025.6.23.1",
   "host_permissions": [
