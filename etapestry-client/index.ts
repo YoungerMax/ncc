@@ -68,9 +68,11 @@ interface EtApiResponse {
 export class EtApiClient {
 	private wsdl!: EtApiWSDL;
 	private timeoutMs: number;
+	private cookies: Record<string, string>;
 
-	constructor(private wsdlEndpoint: string, private timeoutMs = 15000) {
+	constructor(private wsdlEndpoint: string, private timeoutMs: number = 15000) {
 		this.timeoutMs = timeoutMs;
+		this.cookies = {};
 	}
 
 	/** Fetch and parse the WSDL */
@@ -81,7 +83,7 @@ export class EtApiClient {
 				'Accept': 'text/xml,*/*',
 				'Connection': 'Close'
 			},
-			credentials: 'same-origin',
+			credentials: 'include',
 			signal: AbortSignal.timeout(this.timeoutMs)
 		});
 
@@ -234,13 +236,24 @@ export class EtApiClient {
 			method: 'POST',
 			headers: {
 				'Content-Type': 'text/xml; charset="utf-8"',
-				'SOAPAction': '\"\"'
+				'SOAPAction': '\"\"',
+				'Cookie': Object.entries(this.cookies).map(([name, value]) => `${name}=${value}`).join('; ')
 			},
 			body: xmlBody,
-			credentials: 'same-origin',
+			credentials: 'include',
 			signal: AbortSignal.timeout(this.timeoutMs)
 		});
 		const xml = await res.text();
+		
+		for (let [headerKey, headerValue] of res.headers.entries()) {
+			if (headerKey !== 'set-cookie') {
+				continue;
+			}
+
+			const cookie = headerValue.split(';')[0]!;
+			const [name, value] = cookie.split('=');
+			this.cookies[name!] = value!;
+		}
 
 		// parse response
 		const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '' });

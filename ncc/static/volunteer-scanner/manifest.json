@@ -1,0 +1,28 @@
+{
+    "name": "Needham Community Council Volunteer Scanner",
+    "short_name": "Volunteer Scanner",
+    "start_url": "/volunteer-scanner",
+    "display": "fullscreen",
+    "background_color": "#1f2937",
+    "theme_color": "#1f2937",
+    "icons": [
+        {
+            "src": "/logo-128.png",
+            "sizes": "128x128",
+            "type": "image/png"
+        },
+        {
+            "src": "/logo-256.png",
+            "sizes": "256x256",
+            "type": "image/png"
+        }
+    ],
+    "screenshots": [
+        {
+            "src": "/volunteer-scanner/screenshot-1.png",
+            "sizes": "3072x1920",
+            "type": "image/png",
+            "form_factor": "wide"
+        }
+    ]
+}
