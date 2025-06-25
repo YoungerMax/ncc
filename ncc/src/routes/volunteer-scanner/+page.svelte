@@ -81,3 +81,11 @@
 		</div>
 	</div>
 {/if}
+
+<style>
+	:global(body) {
+		background: #1f2937;
+		color: #fff;
+		font-family: 'Inter', sans-serif;
+	}
+</style>

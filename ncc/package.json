@@ -39,6 +39,8 @@
 		"wrangler": "^4.20.5"
 	},
 	"dependencies": {
+		"@types/papaparse": "^5.3.16",
+		"papaparse": "^5.5.3",
 		"zod": "^3.25.67",
 		"zod-form-data": "^3.0.0"
 	}
