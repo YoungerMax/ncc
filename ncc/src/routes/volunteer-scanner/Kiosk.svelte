@@ -72,6 +72,10 @@
 	}
 
 	async function addHours(accountNumber: number, isForgot: boolean, hours?: number) {
+		if (hours) {
+			hours = Math.ceil(hours);
+		}
+
 		const { accountName }: { accountName: string } = await (
 			await fetch('/volunteer-scanner/add-hours', {
 				method: 'POST',

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { read } from 'xlsx';
 	import Papa from 'papaparse';
 	import { version } from './constants';
 
@@ -11,10 +12,7 @@
 		NumFoodPantryAdultMembers: string;
 		NumFoodPantryTeenMembers: string;
 		NumFoodPantryChildrenMembers: string;
-		TempFoodDeliveryPreferences: string;
-		MailingStatus: string;
 		PhoneNumber: string;
-		IsSelfCertificationComplete: string;
 		EmailAddress: string;
 	}
 
@@ -30,14 +28,60 @@
 	}
 
 	interface MergedRecord {
-		etap: EtapRecord;
-		sug?: SugRecord;
+		etap?: EtapRecord;
+		sug: SugRecord;
 	}
 
 	let isProcessing = false;
 	let showDownloads = false;
 	let mergedCsvData = '';
 	let rosterCsvData = '';
+
+	async function parseSpreadsheet(file: File): Promise<string[][]> {
+		if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
+			return await parseXlsx(file);
+		} else if (file.name.endsWith('.csv')) {
+			return await parseCsv(file);
+		}
+
+		throw new Error('Unknown file type: ' + file.name);
+	}
+
+	async function parseXlsx(file: File): Promise<string[][]> {
+		const workbook = read(await file.arrayBuffer());
+		const sheetName = workbook.SheetNames[0];
+		const sheet = workbook.Sheets[sheetName];
+		const data: string[][] = [];
+
+		// Get the range of cells in the sheet
+		const range = sheet['!ref'];
+		if (!range) {
+			return []; // Handle empty sheet
+		}
+
+		// Parse the range string to get the start and end cells
+		const [startCell, endCell] = range.split(':');
+		const startCol = startCell.replace(/[^A-Z]/g, '');
+		const startRow = parseInt(startCell.replace(/[^0-9]/g, ''), 10);
+		const endCol = endCell.replace(/[^A-Z]/g, '');
+		const endRow = parseInt(endCell.replace(/[^0-9]/g, ''), 10);
+
+		// Iterate over rows
+		for (let row = startRow; row <= endRow; row++) {
+			const rowData: string[] = [];
+			// Iterate over columns
+			for (let colCode = startCol.charCodeAt(0); colCode <= endCol.charCodeAt(0); colCode++) {
+				const col = String.fromCharCode(colCode);
+				const cellAddress = col + row;
+				const cell = sheet[cellAddress];
+				const cellValue = cell ? cell.w || cell.v?.toString() || '' : ''; // Access 'w' for formatted value, 'v' for raw value
+				rowData.push(cellValue);
+			}
+			data.push(rowData);
+		}
+
+		return data;
+	}
 
 	function parseCsv(file: File): Promise<string[][]> {
 		return new Promise((resolve, reject) => {
@@ -66,6 +110,7 @@
 		const form = event.currentTarget;
 		const etapFile = (form.etapestryReport as HTMLInputElement).files?.[0];
 		const sugFile = (form.signUpGeniusReport as HTMLInputElement).files?.[0];
+
 		if (!etapFile || !sugFile) {
 			alert('Both files are required');
 			return;
@@ -76,57 +121,84 @@
 
 		try {
 			// 1) Read raw CSV arrays
-			const [rawEtap, rawSug] = await Promise.all([parseCsv(etapFile), parseCsv(sugFile)]);
+			const [rawEtap, rawSug] = await Promise.all([
+				parseSpreadsheet(etapFile),
+				parseSpreadsheet(sugFile)
+			]);
 
 			// 2) Build typed arrays (skip headers/empty rows)
 			const sugRecords: SugRecord[] = rawSug
 				.slice(1)
 				.map((r) => ({
-					Date: r[0],
-					TimeSlot: r[2],
-					FirstName: r[3].trim(),
-					LastName: r[4].trim(),
-					EmailAddress: r[5].trim(),
-					SignUpComment: r[6],
-					SignUpTimestamp: r[7],
-					OrderSpecificItems: r[8]
+					Date: r[0] || '',
+					TimeSlot: r[2] || '',
+					FirstName: (r[3] || '').trim(),
+					LastName: (r[4] || '').trim(),
+					EmailAddress: (r[5] || '').trim(),
+					SignUpComment: r[6] || '',
+					SignUpTimestamp: r[7] || '',
+					OrderSpecificItems: r[8] || ''
 				}))
 				.filter((r) => r.FirstName && r.LastName);
+
+			
+
+			function findColumnIndex(rawEtap: string[][], columnName: string): number {
+				const index = rawEtap[0].findIndex(colName => colName.toLowerCase().includes(columnName.toLowerCase()));
+				if (index === -1) {
+					throw new Error(`Etapestry report is missing column for "${columnName}"`);
+				}
+				return index;
+			}
+
+			let colidx_AccountNumber: number = findColumnIndex(rawEtap, 'account number');
+			let colidx_LastName: number = findColumnIndex(rawEtap, 'last name');
+			let colidx_FirstName: number = findColumnIndex(rawEtap, 'first name');
+			let colidx_NumFoodPantryHouseholdMembers: number = findColumnIndex(rawEtap, 'total # of fp members in household');
+			let colidx_NumFoodPantryElderMembers: number = findColumnIndex(rawEtap, '# of fp older adults in household');
+			let colidx_NumFoodPantryAdultMembers: number = findColumnIndex(rawEtap, '# of fp adults in household');
+			let colidx_NumFoodPantryTeenMembers: number = findColumnIndex(rawEtap, '# of fp teens in household');
+			let colidx_NumFoodPantryChildrenMembers: number = findColumnIndex(rawEtap, '# of fp children in household');
+			let colidx_PhoneNumber: number = findColumnIndex(rawEtap, 'phone');
+			let colidx_EmailAddress: number = findColumnIndex(rawEtap, 'email');
 
 			const etapRecords: EtapRecord[] = rawEtap
 				.slice(2)
 				.map((r) => ({
-					AccountNumber: r[0],
-					LastName: r[1].trim(),
-					FirstName: r[2].trim(),
-					NumFoodPantryHouseholdMembers: r[3],
-					NumFoodPantryElderMembers: r[4],
-					NumFoodPantryAdultMembers: r[5],
-					NumFoodPantryTeenMembers: r[6],
-					NumFoodPantryChildrenMembers: r[7],
-					TempFoodDeliveryPreferences: r[8],
-					MailingStatus: r[9],
-					PhoneNumber: r[10],
-					IsSelfCertificationComplete: r[11],
-					EmailAddress: r[12].trim()
+					AccountNumber: r[colidx_AccountNumber] || '',
+					LastName: (r[colidx_LastName] || '').trim(),
+					FirstName: (r[colidx_FirstName] || '').trim(),
+					NumFoodPantryHouseholdMembers: r[colidx_NumFoodPantryHouseholdMembers] || '',
+					NumFoodPantryElderMembers: r[colidx_NumFoodPantryElderMembers] || '',
+					NumFoodPantryAdultMembers: r[colidx_NumFoodPantryAdultMembers] || '',
+					NumFoodPantryTeenMembers: r[colidx_NumFoodPantryTeenMembers] || '',
+					NumFoodPantryChildrenMembers: r[colidx_NumFoodPantryChildrenMembers] || '',
+					PhoneNumber: r[colidx_PhoneNumber] || '',
+					EmailAddress: (r[colidx_EmailAddress] || '').trim()
 				}))
 				.filter((r) => r.FirstName && r.LastName);
-
+			
 			// 3) Merge
-			const merged: MergedRecord[] = etapRecords.map((e) => {
-				// try by email, then by name
-				let match = sugRecords.find((s) => s.EmailAddress === e.EmailAddress);
-				if (!match) {
-					match = sugRecords.find((s) => s.FirstName === e.FirstName && s.LastName === e.LastName);
-				}
-				return { etap: e, sug: match };
-			});
+			let merged: MergedRecord[] = [];
+
+			for (let sug of sugRecords) {
+				let match: MergedRecord = {
+					sug: sug,
+					etap: etapRecords.find(etap => (etap.EmailAddress === sug.EmailAddress) || (sug.FirstName === etap.FirstName && sug.LastName === etap.LastName))
+				};
+
+				merged.push(match);
+			}
 
 			// 4) Sort by signup date/time
 			function parseDateSlot(s?: SugRecord) {
-				if (!s) return { date: 0, time: 0 };
+				if (!s) {
+					return { date: 0, time: 0 };
+				}
+
 				const [m, d, y] = s.Date.split('/').map(Number);
 				const date = new Date(y, m - 1, d).getTime();
+
 				// timeSlot like "3:04 pm - 4:04 pm"
 				const ts = s.TimeSlot.split('-')[0].trim();
 				const dt = new Date(`1970-01-01 ${ts}`);
@@ -135,8 +207,9 @@
 			}
 
 			merged.sort((a, b) => {
-				const da = parseDateSlot(a.sug),
-					db = parseDateSlot(b.sug);
+				const da = parseDateSlot(a.sug);
+				const db = parseDateSlot(b.sug);
+
 				return da.date === db.date ? da.time - db.time : da.date - db.date;
 			});
 
@@ -151,9 +224,7 @@
 					'# of FP Adults in Household',
 					'# of FP Teens in Household - 12-18 yrs old',
 					'# of FP Children in Household - 11 and under',
-					'Temporary Food Delivery Preferences',
-					'Mailing Status',
-					'Found in SignUp Genius'
+					'Found in Etapestry'
 				]
 			];
 
@@ -166,36 +237,70 @@
 					'First Name',
 					'Phone',
 					'Total # of FP members in Household',
+					'# of FP Older Adults in Household - 65 & older',
+					'# of FP Adults in Household',
+					'# of FP Teens in Household - 12-18 yrs old',
+					'# of FP Children in Household - 11 and under',
 					'Comments'
 				]
 			];
 
-			for (const { etap: e, sug } of merged) {
-				const found = sug ? 'Yes' : 'No';
-				mergedRows.push([
-					e.AccountNumber,
-					e.LastName,
-					e.FirstName,
-					e.NumFoodPantryHouseholdMembers,
-					e.NumFoodPantryElderMembers,
-					e.NumFoodPantryAdultMembers,
-					e.NumFoodPantryTeenMembers,
-					e.NumFoodPantryChildrenMembers,
-					e.TempFoodDeliveryPreferences,
-					e.MailingStatus,
-					found
-				]);
+			for (const { etap, sug } of merged) {
+				const found = etap ? 'Yes' : 'No';
 
-				if (sug) {
+				if (etap) {
 					rosterRows.push([
-						e.AccountNumber,
+						etap.AccountNumber, // Account Number
 						sug.Date,
 						sug.TimeSlot,
-						e.LastName,
-						e.FirstName,
-						e.PhoneNumber,
-						e.NumFoodPantryHouseholdMembers,
+						sug.LastName,
+						sug.FirstName,
+						etap.PhoneNumber,
+						etap.NumFoodPantryHouseholdMembers,
+						etap.NumFoodPantryElderMembers,
+						etap.NumFoodPantryAdultMembers,
+						etap.NumFoodPantryTeenMembers,
+						etap.NumFoodPantryChildrenMembers,
 						[sug.SignUpComment, sug.OrderSpecificItems].filter(Boolean).join('; ')
+					]);
+
+					mergedRows.push([
+						etap.AccountNumber,
+						sug.LastName,
+						sug.FirstName,
+						etap.NumFoodPantryHouseholdMembers,
+						etap.NumFoodPantryElderMembers,
+						etap.NumFoodPantryAdultMembers,
+						etap.NumFoodPantryTeenMembers,
+						etap.NumFoodPantryChildrenMembers,
+						found
+					]);
+				} else {
+					rosterRows.push([
+						"Not in Etapestry - No Account Number",
+						sug.Date,
+						sug.TimeSlot,
+						sug.LastName,
+						sug.FirstName,
+						"Not in Etapestry - No Phone Number",
+						"Not in Etapestry - No Total # of FP members in Household",
+						"Not in Etapestry - No # of FP Older Adults",
+						"Not in Etapestry - No # of FP Adults",
+						"Not in Etapestry - No # of FP Teens",
+						"Not in Etapestry - No # of FP Children",
+						[sug.SignUpComment, sug.OrderSpecificItems].filter(Boolean).join('; ')
+					]);
+
+					mergedRows.push([
+						"Not in Etapestry - No Account Number",
+						sug.LastName,
+						sug.FirstName,
+						"Not in Etapestry - No Total # of FP members in Household",
+						"Not in Etapestry - No # of FP Older Adults",
+						"Not in Etapestry - No # of FP Adults",
+						"Not in Etapestry - No # of FP Teens",
+						"Not in Etapestry - No # of FP Children",
+						found
 					]);
 				}
 			}
@@ -209,6 +314,7 @@
 			showDownloads = true;
 		} catch (error) {
 			isProcessing = false;
+			console.error(error);
 			alert('Error processing files: ' + error);
 		}
 	}
@@ -239,6 +345,7 @@
 							id="etapestryReport"
 							class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
 							disabled={isProcessing}
+							accept=".xlsx,.xls,.csv"
 						/>
 					</div>
 				</div>
@@ -254,6 +361,7 @@
 							id="signUpGeniusReport"
 							class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
 							disabled={isProcessing}
+							accept=".xlsx,.xls,.csv"
 						/>
 					</div>
 				</div>
@@ -292,7 +400,7 @@
 					</button>
 				</div>
 
-                <p class="text-sm text-center">v{version}</p>
+				<p class="text-center text-sm">v{version}</p>
 			</form>
 		{/if}
 

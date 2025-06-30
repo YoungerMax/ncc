@@ -27,12 +27,6 @@
 			buttonColor: 'bg-purple-600 hover:bg-purple-700'
 		}
 	];
-
-	let mounted = false;
-	
-	onMount(() => {
-		mounted = true;
-	});
 </script>
 
 <svelte:head>
@@ -55,7 +49,7 @@
 		<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
 			{#each tools as tool, index}
 				<div 
-					class="group relative rounded-xl border-2 p-6 transition-all duration-300 {tool.color} {mounted ? 'animate-fade-in' : ''}"
+					class="group relative rounded-xl border-2 p-6 transition-all duration-300 {tool.color} animate-fade-in"
 					style="animation-delay: {index * 150}ms"
 				>
 					<!-- Icon -->
