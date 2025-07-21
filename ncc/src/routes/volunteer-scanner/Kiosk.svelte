@@ -23,11 +23,11 @@
 		return new Promise((resolve, reject) => {
 			const idb = indexedDB.open(databaseName, databaseVersion);
 
-			idb.onsuccess = (event) => {
+			idb.onsuccess = () => {
 				resolve(idb.result);
 			};
 
-			idb.onerror = (event) => {
+			idb.onerror = () => {
 				reject(idb.error);
 			};
 
@@ -42,15 +42,15 @@
 	}
 
 	async function getAccountScans(db: IDBDatabase, accountNumber: number): Promise<AccountScan[]> {
-		return new Promise(async (resolve, reject) => {
+		return new Promise((resolve, reject) => {
 			const tx = db.transaction('scans', 'readonly');
 			const o = tx.objectStore('scans').index('accountNumber').getAll(accountNumber);
 
-			o.onsuccess = (event) => {
+			o.onsuccess = () => {
 				resolve(o.result);
 			};
 
-			o.onerror = (event) => {
+			o.onerror = () => {
 				reject(o.error);
 			};
 		});
@@ -135,7 +135,10 @@
 				const tx = db.transaction('scans', 'readwrite');
 
 				try {
-					tx.objectStore('scans').add({ accountNumber: accountNumber, timestamp: signOutTimestamp });
+					tx.objectStore('scans').add({
+						accountNumber: accountNumber,
+						timestamp: signOutTimestamp
+					});
 					tx.objectStore('scans').add({ accountNumber: accountNumber, timestamp: now });
 					tx.commit();
 
@@ -155,7 +158,10 @@
 				const tx = db.transaction('scans', 'readwrite');
 
 				try {
-					tx.objectStore('scans').add({ accountNumber: accountNumber, timestamp: signOutTimestamp });
+					tx.objectStore('scans').add({
+						accountNumber: accountNumber,
+						timestamp: signOutTimestamp
+					});
 
 					return {
 						accountName: await addHours(accountNumber, false, hours),
@@ -207,7 +213,7 @@
 		}
 
 		(event.target as HTMLFormElement).reset();
-		timeoutId = setTimeout(resetText, 5000);
+		timeoutId = setTimeout(resetText, 5000) as unknown as number;
 	}}
 >
 	<!-- Account Number -->

@@ -63,7 +63,7 @@
 							Save
 						</button>
 						{#if success}
-							<p class="ml-2 inline-block text-sm italic text-green-500">Saved!</p>
+							<p class="ml-2 inline-block text-sm text-green-500 italic">Saved!</p>
 						{/if}
 					</div>
 					<button
