@@ -1,6 +1,5 @@
 import Papa from 'papaparse';
 import { createCsvUrl, findColumnIndex, parseSpreadsheet, type Artifact } from './lib';
-import { text } from 'zod-form-data';
 
 export async function mergeEtapSug(file1: File, file2: File) {
 	interface EtapRecord {
@@ -254,7 +253,11 @@ export async function mergeEtapSug(file1: File, file2: File) {
 	const { jsPDF } = await import('jspdf');
 
 	const rosterPrintable = new jsPDF({ orientation: 'landscape' });
-	const title = `Roster for ${new Date().toLocaleDateString(undefined, { dateStyle: 'full' })}`;
+	const dates = rosterRows
+		.map((x) => x[1])
+		.filter((date, index, self) => index > 0 && self.indexOf(date) === index)
+		.map((x) => new Date(x).toLocaleDateString(undefined, { dateStyle: 'full' }));
+	const title = `Roster for ${dates.join(', ')}`;
 
 	rosterPrintable.setDocumentProperties({ title });
 	rosterPrintable.setFontSize(24);
