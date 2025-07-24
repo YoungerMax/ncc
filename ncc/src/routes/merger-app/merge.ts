@@ -1,5 +1,6 @@
 import Papa from 'papaparse';
-import { findColumnIndex, parseSpreadsheet, type Artifact } from './lib';
+import { createCsvUrl, findColumnIndex, parseSpreadsheet, type Artifact } from './lib';
+import { text } from 'zod-form-data';
 
 export async function mergeEtapSug(file1: File, file2: File) {
 	interface EtapRecord {
@@ -222,44 +223,141 @@ export async function mergeEtapSug(file1: File, file2: File) {
 			]);
 		} else {
 			rosterRows.push([
-				'Not in Etapestry - No Account Number',
+				'N/A',
 				sug.Date,
 				sug.TimeSlot,
 				sug.LastName,
 				sug.FirstName,
-				'Not in Etapestry - No Phone Number',
-				'Not in Etapestry - No Total # of FP members in Household',
-				'Not in Etapestry - No # of FP Older Adults',
-				'Not in Etapestry - No # of FP Adults',
-				'Not in Etapestry - No # of FP Teens',
-				'Not in Etapestry - No # of FP Children',
+				'N/A',
+				'N/A',
+				'N/A',
+				'N/A',
+				'N/A',
+				'N/A',
 				[sug.SignUpComment, sug.OrderSpecificItems].filter(Boolean).join('; ')
 			]);
 
 			mergedRows.push([
-				'Not in Etapestry - No Account Number',
+				'N/A',
 				sug.LastName,
 				sug.FirstName,
-				'Not in Etapestry - No Total # of FP members in Household',
-				'Not in Etapestry - No # of FP Older Adults',
-				'Not in Etapestry - No # of FP Adults',
-				'Not in Etapestry - No # of FP Teens',
-				'Not in Etapestry - No # of FP Children',
+				'N/A',
+				'N/A',
+				'N/A',
+				'N/A',
+				'N/A',
 				found
 			]);
 		}
 	}
 
+	const { jsPDF } = await import('jspdf');
+
+	const rosterPrintable = new jsPDF({ orientation: 'landscape' });
+	const title = `Roster for ${new Date().toLocaleDateString(undefined, { dateStyle: 'full' })}`;
+
+	rosterPrintable.setDocumentProperties({ title });
+	rosterPrintable.setFontSize(24);
+	rosterPrintable.text(title, 14, 15);
+
+	let numBags = 0;
+	let numBoxes = 0;
+	let numUnknown = 0;
+
+	for (const entry of merged) {
+		if (entry.etap) {
+			if (parseInt(entry.etap.NumFoodPantryHouseholdMembers) >= 3) {
+				numBoxes++;
+			} else {
+				numBags++;
+			}
+		} else {
+			numUnknown++;
+		}
+	}
+
+	rosterPrintable.setFontSize(17);
+	rosterPrintable.text(`Bags: ${numBags} | Boxes: ${numBoxes} | Unknown: ${numUnknown}`, 14, 22);
+
+	const { autoTable } = await import('jspdf-autotable');
+
+	const printableHeaders = [
+		'Acct #',
+		'Come?',
+		'# of FM',
+		'Time',
+		'First Name',
+		'Last Name',
+		'Phone',
+		'Notes'
+	];
+
+	const printableBody = rosterRows.slice(1).map((row) => {
+		// Per rosterRows definition:
+		// row[0] = Account Number
+		// row[2] = Time
+		// row[3] = Last Name
+		// row[4] = First Name
+		// row[5] = Phone
+		// row[6] = Total # of FP members in Household
+		return [
+			row[0], // Acct #
+			'', // Come?
+			row[6], // # of FM
+			row[2], // Time
+			row[4], // First Name
+			row[3], // Last Name
+			row[5], // Phone
+			'' // Notes
+		];
+	});
+
+	autoTable(rosterPrintable, {
+		startY: 25,
+		head: [printableHeaders],
+		body: printableBody,
+		theme: 'grid',
+		columnStyles: {
+			0: { cellWidth: 17 },
+			1: { cellWidth: 17 },
+			2: { cellWidth: 17 },
+			3: { cellWidth: 40 },
+			4: { cellWidth: 35 },
+			5: { cellWidth: 35 },
+			6: { cellWidth: 35 }
+		},
+		didParseCell: (data: any) => {
+			if (data.section !== 'body') return;
+
+			// # of FM is at index 2 of our printableBody row
+			const numFamilyMembersStr = (data.row.raw as string[])[2];
+			const numFamilyMembers = parseInt(numFamilyMembersStr, 10);
+
+			if (!isNaN(numFamilyMembers) && numFamilyMembers >= 3) {
+				data.cell.styles.fillColor = '#ffff00'; // Yellow
+			} else {
+				data.cell.styles.fillColor = '#ffffff'; // White
+			}
+			// ensure text is black for readability on both white and yellow backgrounds
+			data.cell.styles.textColor = '#000000';
+		}
+	});
+
 	return [
 		{
 			name: 'Merged Report',
-			content: Papa.unparse(mergedRows),
+			contentUrl: createCsvUrl(Papa.unparse(mergedRows)),
 			filename: 'merged.csv'
 		},
 		{
 			name: 'Roster Report',
-			content: Papa.unparse(rosterRows),
+			contentUrl: createCsvUrl(Papa.unparse(rosterRows)),
 			filename: 'roster.csv'
+		},
+		{
+			name: 'Roster Printable',
+			filename: 'roster.pdf',
+			contentUrl: rosterPrintable.output('bloburl')
 		}
 	] as Artifact[];
 }
@@ -359,7 +457,7 @@ export async function mergeEtapBb(file1: File, file2: File) {
 	return [
 		{
 			name: 'Merged Report',
-			content: Papa.unparse(mergedRows),
+			contentUrl: createCsvUrl(Papa.unparse(mergedRows)),
 			filename: 'merged.csv'
 		}
 	] as Artifact[];

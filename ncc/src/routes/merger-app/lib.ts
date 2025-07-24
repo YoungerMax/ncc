@@ -2,7 +2,7 @@ import { read } from 'xlsx';
 import Papa from 'papaparse';
 
 export interface Artifact {
-	content: string;
+	contentUrl: string;
 	filename: string;
 	name: string;
 }
@@ -63,9 +63,13 @@ function parseCsv(file: File): Promise<string[][]> {
 	});
 }
 
-export function downloadCsv(filename: string, csvData: string) {
+export function createCsvUrl(csvData: string) {
 	const blob = new Blob([csvData], { type: 'text/csv;charset=utf-8;' });
 	const url = URL.createObjectURL(blob);
+	return url;
+}
+
+export function downloadCsv(filename: string, url: string) {
 	const a = document.createElement('a');
 	a.href = url;
 	a.download = filename;
