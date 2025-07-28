@@ -45,6 +45,7 @@
 		"jspdf-autotable": "^5.0.2",
 		"papaparse": "^5.5.3",
 		"xlsx": "^0.18.5",
+		"xlsx-js-style": "^1.2.0",
 		"zod": "^3.25.67",
 		"zod-form-data": "^3.0.0"
 	}

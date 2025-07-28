@@ -346,6 +346,131 @@ export async function mergeEtapSug(file1: File, file2: File) {
 		}
 	});
 
+	// Create Excel spreadsheet version of the roster printable
+	const XLSX = await import('xlsx-js-style');
+
+	// Helper to get or create a cell object from the worksheet by row and column index.
+	// It ensures the cell object exists before attempting to apply styles.
+	const getOrCreateCell = (worksheet: any, r: number, c: number, value?: any) => {
+		const cellRef = XLSX.utils.encode_cell({ r, c });
+		if (!worksheet[cellRef]) {
+			// If cell doesn't exist, create it with an initial value (if provided)
+			worksheet[cellRef] = { v: value !== undefined ? value : '' };
+		}
+		return worksheet[cellRef];
+	};
+
+	// Helper to apply nested style properties to a cell object.
+	// It recursively ensures parent style objects exist (e.g., `cell.s`, `cell.s.font`)
+	// before applying the final style properties.
+	const applyCellStyles = (cell: any, styles: any) => {
+		if (!cell.s) cell.s = {};
+		for (const key in styles) {
+			if (Object.prototype.hasOwnProperty.call(styles, key)) {
+				const styleValue = styles[key];
+				if (typeof styleValue === 'object' && styleValue !== null && !Array.isArray(styleValue)) {
+					// If the style value is an object (e.g., 'font', 'alignment', 'fill'),
+					// ensure the nested object exists and then merge properties into it.
+					if (!cell.s[key]) cell.s[key] = {};
+					Object.assign(cell.s[key], styleValue);
+				} else {
+					// Otherwise, it's a direct style property (e.g., 'numFmt' if applied directly to 's')
+					cell.s[key] = styleValue;
+				}
+			}
+		}
+	};
+
+	// Prepare data for Excel
+	const excelData: string[][] = [];
+
+	// Add title, summary, and an empty row for spacing
+	excelData.push([title]);
+	excelData.push([`Bags: ${numBags} | Boxes: ${numBoxes} | Unknown: ${numUnknown}`]);
+	excelData.push([]);
+
+	// Add headers and body rows
+	excelData.push(printableHeaders);
+	printableBody.forEach((row) => excelData.push(row));
+
+	const worksheet = XLSX.utils.aoa_to_sheet(excelData);
+
+	// Merge cells for title and summary to span across columns
+	worksheet['!merges'] = [
+		{ s: { r: 0, c: 0 }, e: { r: 0, c: printableHeaders.length - 1 } }, // Merge title
+		{ s: { r: 1, c: 0 }, e: { r: 1, c: printableHeaders.length - 1 } } // Merge summary
+	];
+
+	// Apply styles to Title
+	const titleCell = getOrCreateCell(worksheet, 0, 0, excelData[0][0]);
+	applyCellStyles(titleCell, {
+		font: { bold: true, sz: 16 },
+		alignment: { horizontal: 'center', vertical: 'middle' }
+	});
+
+	// Apply styles to Summary
+	const summaryCell = getOrCreateCell(worksheet, 1, 0, excelData[1][0]);
+	applyCellStyles(summaryCell, {
+		font: { bold: true, sz: 12 },
+		alignment: { horizontal: 'center', vertical: 'middle' }
+	});
+
+	// Apply styles to Headers
+	const headersRowIndex = 3; // The row containing headers (0-indexed in excelData and worksheet)
+	for (let col = 0; col < printableHeaders.length; col++) {
+		const headerCell = getOrCreateCell(
+			worksheet,
+			headersRowIndex,
+			col,
+			excelData[headersRowIndex][col]
+		);
+		applyCellStyles(headerCell, {
+			font: { bold: true },
+			alignment: { wrapText: true, vertical: 'top' }
+		});
+	}
+
+	// Apply conditional formatting: yellow background for rows with 3+ family members
+	const dataStartRowIndex = 4; // Body data starts at this 0-indexed row in excelData
+	for (let i = 0; i < printableBody.length; i++) {
+		const numFamilyMembersStr = printableBody[i][2]; // # of FM is at index 2 in printableBody row
+		const numFamilyMembers = parseInt(numFamilyMembersStr, 10);
+
+		if (!isNaN(numFamilyMembers) && numFamilyMembers >= 3) {
+			const excelRowIndex = dataStartRowIndex + i;
+			for (let col = 0; col < printableHeaders.length; col++) {
+				const cell = getOrCreateCell(worksheet, excelRowIndex, col, excelData[excelRowIndex][col]);
+				applyCellStyles(cell, {
+					fill: { fgColor: { rgb: 'FFFFFF00' } }, // Yellow (AARRGGBB)
+					font: { color: { rgb: 'FF000000' } } // Black text (AARRGGBB)
+				});
+			}
+		}
+	}
+
+	// Set column widths for better presentation
+	worksheet['!cols'] = [
+		{ wch: 10 }, // Acct # (col 0)
+		{ wch: 10 }, // Come? (col 1)
+		{ wch: 8 }, // # of FM (col 2)
+		{ wch: 15 }, // Time (col 3)
+		{ wch: 15 }, // First Name (col 4)
+		{ wch: 15 }, // Last Name (col 5)
+		{ wch: 15 }, // Phone (col 6)
+		{ wch: 20 } // Notes (col 7)
+	];
+
+	// Create a workbook and add the styled worksheet
+	const workbook = XLSX.utils.book_new();
+	XLSX.utils.book_append_sheet(workbook, worksheet, 'Roster');
+
+	// Generate Excel file as an ArrayBuffer and then a Blob URL
+	const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+	const excelBlob = new Blob([excelBuffer], {
+		type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+	}); // Correct MIME type for .xlsx
+	const excelBlobUrl = URL.createObjectURL(excelBlob);
+
 	return [
 		{
 			name: 'Merged Report',
@@ -358,9 +483,14 @@ export async function mergeEtapSug(file1: File, file2: File) {
 			filename: 'roster.csv'
 		},
 		{
-			name: 'Roster Printable',
+			name: 'Roster Printable (PDF)',
 			filename: 'roster.pdf',
 			contentUrl: rosterPrintable.output('bloburl')
+		},
+		{
+			name: 'Roster Printable (Excel)',
+			filename: 'roster.xlsx',
+			contentUrl: excelBlobUrl
 		}
 	] as Artifact[];
 }
