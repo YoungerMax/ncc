@@ -6,13 +6,20 @@
 	let isProcessing = $state(false);
 	let showDownloads = $state(false);
 	let artifacts: Artifact[] = $state([]);
+	let mergeMode: 'mergeEtapSug' | 'mergeEtapBb' | undefined = $state();
+	let title = $derived(
+		{
+			'': 'Invalid',
+			mergeEtapSug: 'Merge SignUp Genius and Etapestry Reports',
+			mergeEtapBb: 'Merge Blackbaud and Etapestry Reports'
+		}[mergeMode ?? '']
+	);
 
 	export async function handleSubmit(
 		event: SubmitEvent & { currentTarget: EventTarget & HTMLFormElement }
 	) {
 		event.preventDefault();
 		const form = event.currentTarget;
-		const mergeMode = (form.mergeMode as HTMLSelectElement).value;
 		const file1 = (form.file1 as HTMLInputElement).files?.[0];
 		const file2 = (form.file2 as HTMLInputElement).files?.[0];
 
@@ -41,7 +48,7 @@
 			}
 
 			isProcessing = false;
-			showDownloads = true;
+			showDownloads = artifacts.length > 0;
 		} catch (error) {
 			isProcessing = false;
 			console.error(error);
@@ -50,9 +57,13 @@
 	}
 </script>
 
+<svelte:head>
+	<title>Report Merger Tool</title>
+</svelte:head>
+
 <div class="flex min-h-screen items-center justify-center bg-gray-200">
 	<div class="w-full max-w-md rounded-lg bg-white px-5 py-8 shadow">
-		<h2 class="mb-4 text-center text-2xl font-bold">Merge Reports</h2>
+		<h2 class="mb-4 text-center text-2xl font-bold">{title}</h2>
 
 		{#if !showDownloads}
 			<form onsubmit={handleSubmit} class="space-y-4">
@@ -64,6 +75,7 @@
 							id="mergeMode"
 							class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
 							disabled={isProcessing}
+							bind:value={mergeMode}
 						>
 							<option value="mergeEtapSug">Etapestry and SignUp Genius</option>
 							<option value="mergeEtapBb">Etapestry and Blackbaud</option>
@@ -128,7 +140,7 @@
 							</svg>
 							Processing...
 						{:else}
-							Merge Reports
+							{title}
 						{/if}
 					</button>
 				</div>

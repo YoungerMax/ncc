@@ -514,11 +514,9 @@ export async function mergeEtapBb(file1: File, file2: File) {
 		return [];
 	}
 
-	if (rawFile1[0].find((colName) => colName.toLowerCase().trim().includes('transaction id'))) {
+	if (rawFile1[0].find((colName) => colName.toLowerCase().trim().includes('net amount'))) {
 		rawBb = rawFile1;
-	} else if (
-		rawFile2[0].find((colName) => colName.toLowerCase().trim().includes('transaction id'))
-	) {
+	} else if (rawFile2[0].find((colName) => colName.toLowerCase().trim().includes('net amount'))) {
 		rawBb = rawFile2;
 	} else {
 		alert('Missing Blackbaud spreadsheet. Are you sure you attached the correct file?');
@@ -564,28 +562,6 @@ export async function mergeEtapBb(file1: File, file2: File) {
 	mergedRows = mergedRows.map((row) => {
 		return keepColIdxs.map((colIdx) => row[colIdx]);
 	});
-
-	// function parseDateSlot(s?: SugRecord) {
-	// 	if (!s) {
-	// 		return { date: 0, time: 0 };
-	// 	}
-
-	// 	const [m, d, y] = s.Date.split('/').map(Number);
-	// 	const date = new Date(y, m - 1, d).getTime();
-
-	// 	// timeSlot like "3:04 pm - 4:04 pm"
-	// 	const ts = s.TimeSlot.split('-')[0].trim();
-	// 	const dt = new Date(`1970-01-01 ${ts}`);
-	// 	const time = dt.getTime();
-	// 	return { date, time };
-	// }
-
-	// merged.sort((a, b) => {
-	// 	const da = parseDateSlot(a.sug);
-	// 	const db = parseDateSlot(b.sug);
-
-	// 	return da.date === db.date ? da.time - db.time : da.date - db.date;
-	// });
 
 	return [
 		{
