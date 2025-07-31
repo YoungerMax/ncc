@@ -29,6 +29,7 @@ export async function mergeEtapSug(file1: File, file2: File) {
 	interface MergedRecord {
 		etap?: EtapRecord;
 		sug: SugRecord;
+		emptyTimeBlock: boolean;
 	}
 
 	// 1) Read raw CSV arrays
@@ -63,19 +64,17 @@ export async function mergeEtapSug(file1: File, file2: File) {
 	}
 
 	// 2) Build typed arrays (skip headers/empty rows)
-	const sugRecords: SugRecord[] = rawSug
-		.slice(1)
-		.map((r) => ({
-			Date: r[0] || '',
-			TimeSlot: r[2] || '',
-			FirstName: (r[3] || '').trim(),
-			LastName: (r[4] || '').trim(),
-			EmailAddress: (r[5] || '').trim(),
-			SignUpComment: r[6] || '',
-			SignUpTimestamp: r[7] || '',
-			OrderSpecificItems: r[8] || ''
-		}))
-		.filter((r) => r.FirstName && r.LastName);
+	const sugRecords: SugRecord[] = rawSug.slice(1).map((r) => ({
+		Date: r[0] || '',
+		TimeSlot: r[2] || '',
+		FirstName: (r[3] || '').trim(),
+		LastName: (r[4] || '').trim(),
+		EmailAddress: (r[5] || '').trim(),
+		SignUpComment: r[6] || '',
+		SignUpTimestamp: r[7] || '',
+		OrderSpecificItems: r[8] || ''
+	}));
+	//		.filter((r) => r.FirstName && r.LastName);
 
 	const colidx_AccountNumber: number = findColumnIndex(rawEtap[0], 'account number');
 	const colidx_LastName: number = findColumnIndex(rawEtap[0], 'last name');
@@ -123,16 +122,23 @@ export async function mergeEtapSug(file1: File, file2: File) {
 	const merged: MergedRecord[] = [];
 
 	for (const sug of sugRecords) {
-		const match: MergedRecord = {
-			sug: sug,
-			etap: etapRecords.find(
-				(etap) =>
-					etap.EmailAddress === sug.EmailAddress ||
-					(sug.FirstName === etap.FirstName && sug.LastName === etap.LastName)
-			)
-		};
+		let mergedRecord: MergedRecord;
 
-		merged.push(match);
+		if (sug.FirstName || sug.LastName || sug.EmailAddress) {
+			const matchedEtap = etapRecords.find(
+				(etap) =>
+					etap.EmailAddress.toLowerCase() === sug.EmailAddress.toLowerCase() ||
+					(sug.FirstName.toLowerCase() === etap.FirstName.toLowerCase() &&
+						sug.LastName.toLowerCase() === etap.LastName.toLowerCase())
+			);
+
+			mergedRecord = { sug, etap: matchedEtap, emptyTimeBlock: false };
+		} else {
+			// Empty Time Block
+			mergedRecord = { sug, etap: undefined, emptyTimeBlock: true };
+		}
+
+		merged.push(mergedRecord);
 	}
 
 	// 4) Sort by signup date/time
@@ -190,7 +196,7 @@ export async function mergeEtapSug(file1: File, file2: File) {
 		]
 	];
 
-	for (const { etap, sug } of merged) {
+	for (const { etap, sug, emptyTimeBlock } of merged) {
 		const found = etap ? 'Yes' : 'No';
 
 		if (etap) {
@@ -220,6 +226,23 @@ export async function mergeEtapSug(file1: File, file2: File) {
 				etap.NumFoodPantryChildrenMembers,
 				found
 			]);
+		} else if (emptyTimeBlock) {
+			rosterRows.push([
+				'',
+				sug.Date,
+				sug.TimeSlot,
+				sug.LastName,
+				sug.FirstName,
+				'',
+				'',
+				'',
+				'',
+				'',
+				'',
+				[sug.SignUpComment, sug.OrderSpecificItems].filter(Boolean).join('; ')
+			]);
+
+			mergedRows.push(['', sug.LastName, sug.FirstName, '', '', '', '', '', found]);
 		} else {
 			rosterRows.push([
 				'N/A',
